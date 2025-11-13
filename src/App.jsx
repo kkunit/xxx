@@ -161,7 +161,7 @@ export default function App() { // Renamed to App for the Vite structure
             <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
               <p>
                 <span className="font-bold text-gray-800">这是可以分享的正式链接！</span><br/>
-                如果你是在 Vercel 上部署的，复制你浏览器地址栏的 `https://<你的项目名>.vercel.app` 网址即可。
+                如果你是在 Vercel 上部署的，复制你浏览器地址栏的 `https://你的项目名.vercel.app` 网址即可。
               </p>
               <hr className="border-dashed border-pink-200"/>
               <p className="bg-pink-50 p-2 rounded-lg text-pink-700 text-xs">
