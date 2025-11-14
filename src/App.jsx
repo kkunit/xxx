@@ -25,19 +25,18 @@ import {
 } from 'lucide-react';
 
 // --- IMPORTANT: Firebase Initialization ---
-// Since we are deploying to a production environment (Vercel), 
-// we MUST use environment variables for Firebase configuration.
-// If you cannot use environment variables in your setup, 
-// replace the `process.env.VITE_...` with the actual string values 
-// you got from your Firebase project console.
+// Prefer environment variables so deployments can override the defaults.
+// When they are not provided (for example in a static hosting setup),
+// we fall back to the known Firebase project configuration below.
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAxoiJDaMlrgVcxoFx20jcNoZ3drYROsxk',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'kkkk-ed5ea.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'kkkk-ed5ea',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'kkkk-ed5ea.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '430553604960',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:430553604960:web:7aec087fdd169ccd123405',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-SN2216JTKY'
 };
 
 const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
@@ -54,7 +53,7 @@ if (isFirebaseConfigured) {
   console.warn('Firebase configuration is missing. Please check your environment variables.');
 }
 // Use the project ID as a unique identifier for data storage
-const uniqueAppId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'default-app-id';
+const uniqueAppId = firebaseConfig.projectId || 'default-app-id';
 
 export default function App() { // Renamed to App for the Vite structure
   const [user, setUser] = useState(null);
