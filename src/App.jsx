@@ -25,32 +25,42 @@ import {
 } from 'lucide-react';
 
 // --- IMPORTANT: Firebase Initialization ---
-// Since we are deploying to a production environment (Vercel), 
-// we MUST use environment variables for Firebase configuration.
-// If you cannot use environment variables in your setup, 
-// replace the `process.env.VITE_...` with the actual string values 
-// you got from your Firebase project console.
+// Prefer environment variables so deployments can override the defaults.
+// When they are not provided (for example in a static hosting setup),
+// we fall back to the known Firebase project configuration below.
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAxoiJDaMlrgVcxoFx20jcNoZ3drYROsxk',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'kkkk-ed5ea.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'kkkk-ed5ea',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'kkkk-ed5ea.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '430553604960',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:430553604960:web:7aec087fdd169ccd123405',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-SN2216JTKY'
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+
+let app;
+let auth;
+let db;
+
+if (isFirebaseConfigured) {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+} else {
+  console.warn('Firebase configuration is missing. Please check your environment variables.');
+}
 // Use the project ID as a unique identifier for data storage
-const uniqueAppId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'default-app-id';
+const uniqueAppId = firebaseConfig.projectId || 'default-app-id';
 
 export default function App() { // Renamed to App for the Vite structure
   const [user, setUser] = useState(null);
-  const [view, setView] = useState('write'); 
+  const [view, setView] = useState('write');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const configError = !isFirebaseConfigured;
   
   const [senderName, setSenderName] = useState('');
   const [messageContent, setMessageContent] = useState('');
@@ -84,6 +94,8 @@ export default function App() { // Renamed to App for the Vite structure
   useEffect(() => {
     // In a real deployed app, Canvas global auth tokens (__initial_auth_token) are not available.
     // We sign in anonymously for public users, and rely on the UI to handle the admin login.
+    if (configError || !auth) return;
+
     const initAuth = async () => {
       try {
         // Attempt to sign in anonymously (default behavior for public users)
@@ -95,10 +107,11 @@ export default function App() { // Renamed to App for the Vite structure
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
-  }, []);
+  }, [auth, configError]);
 
   // 2. Data Fetching
   useEffect(() => {
+    if (configError || !db) return;
     if (!user || view !== 'read' || !isUnlocked) return;
 
     // Data stored in a public collection path using the unique project ID
@@ -116,13 +129,29 @@ export default function App() { // Renamed to App for the Vite structure
     });
 
     return () => unsubscribe();
-  }, [user, view, isUnlocked, uniqueAppId]);
+  }, [db, user, view, isUnlocked, uniqueAppId, configError]);
 
   // 3. Send Message
   const handleSend = async (e) => {
     e.preventDefault();
     if (!messageContent.trim()) return;
-    if (!user) return;
+    if (configError || !db || !auth) {
+      alert("发送功能暂时不可用，请稍后再试~");
+      return;
+    }
+
+    let activeUser = user || auth.currentUser;
+    if (!activeUser) {
+      try {
+        const credential = await signInAnonymously(auth);
+        activeUser = credential.user;
+        setUser(activeUser);
+      } catch (error) {
+        console.error("Firebase Anonymous Auth error:", error);
+        alert("登陆遇到了一点小问题，请刷新后再试~");
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -166,6 +195,22 @@ export default function App() { // Renamed to App for the Vite structure
 
   return (
     <div style={bgStyle} className="min-h-screen w-full flex flex-col items-center font-sans text-slate-700 relative overflow-hidden selection:bg-pink-200">
+
+      {configError && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white">
+          <div className="max-w-md mx-auto text-center space-y-4 px-6">
+            <div className="flex justify-center">
+              <Mail className="text-pink-500" size={48} />
+            </div>
+            <h1 className="text-2xl font-bold text-pink-600">配置缺失</h1>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              糖果信箱需要正确的 Firebase 配置才能工作。请在部署环境中设置
+              <code className="mx-1 px-1.5 py-0.5 rounded bg-pink-100 text-pink-700">VITE_FIREBASE_*</code>
+              环境变量并重新部署。
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* Share Help Modal */}
       {showShareHelp && (
