@@ -3,7 +3,8 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth,
   signInAnonymously,
-  onAuthStateChanged
+  onAuthStateChanged,
+  signInWithCustomToken
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -27,19 +28,38 @@ import {
 // --- IMPORTANT: Firebase Initialization ---
 // Prefer environment variables so deployments can override the defaults.
 // When they are not provided (for example in a static hosting setup),
-// we fall back to the known Firebase project configuration below.
+// we fall back to the known Firebase project configuration or values injected
+// at runtime (such as window.__firebase_config from the legacy build).
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAxoiJDaMlrgVcxoFx20jcNoZ3drYROsxk',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'kkkk-ed5ea.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'kkkk-ed5ea',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'kkkk-ed5ea.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '430553604960',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:430553604960:web:7aec087fdd169ccd123405',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-SN2216JTKY'
+const getRuntimeConfig = () => {
+  if (typeof globalThis === 'undefined') return undefined;
+  const rawConfig = globalThis.__firebase_config;
+  if (!rawConfig) return undefined;
+  if (typeof rawConfig === 'string') {
+    try {
+      return JSON.parse(rawConfig);
+    } catch (error) {
+      console.warn('Unable to parse runtime Firebase config string:', error);
+      return undefined;
+    }
+  }
+  return rawConfig;
 };
 
-const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+const runtimeConfig = getRuntimeConfig();
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || runtimeConfig?.apiKey || 'AIzaSyAxoiJDaMlrgVcxoFx20jcNoZ3drYROsxk',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || runtimeConfig?.authDomain || 'kkkk-ed5ea.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || runtimeConfig?.projectId || 'kkkk-ed5ea',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || runtimeConfig?.storageBucket || 'kkkk-ed5ea.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || runtimeConfig?.messagingSenderId || '430553604960',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || runtimeConfig?.appId || '1:430553604960:web:7aec087fdd169ccd123405',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || runtimeConfig?.measurementId || 'G-SN2216JTKY'
+};
+
+const requiredConfigKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+const isFirebaseConfigured = requiredConfigKeys.every((key) => firebaseConfig[key]);
 
 let app;
 let auth;
@@ -52,8 +72,10 @@ if (isFirebaseConfigured) {
 } else {
   console.warn('Firebase configuration is missing. Please check your environment variables.');
 }
+
+const runtimeAppId = typeof globalThis !== 'undefined' ? globalThis.__app_id : undefined;
 // Use the project ID as a unique identifier for data storage
-const uniqueAppId = firebaseConfig.projectId || 'default-app-id';
+const uniqueAppId = runtimeAppId || firebaseConfig.projectId || 'default-app-id';
 
 export default function App() { // Renamed to App for the Vite structure
   const [user, setUser] = useState(null);
@@ -92,18 +114,22 @@ export default function App() { // Renamed to App for the Vite structure
 
   // 1. Auth Setup
   useEffect(() => {
-    // In a real deployed app, Canvas global auth tokens (__initial_auth_token) are not available.
-    // We sign in anonymously for public users, and rely on the UI to handle the admin login.
     if (configError || !auth) return;
 
     const initAuth = async () => {
       try {
-        // Attempt to sign in anonymously (default behavior for public users)
-        await signInAnonymously(auth);
+        const initialToken = typeof globalThis !== 'undefined' ? globalThis.__initial_auth_token : undefined;
+        if (initialToken) {
+          await signInWithCustomToken(auth, initialToken);
+        } else if (!auth.currentUser) {
+          // Attempt to sign in anonymously (default behavior for public users)
+          await signInAnonymously(auth);
+        }
       } catch (error) {
-        console.error("Firebase Anonymous Auth error:", error);
+        console.error("Firebase auth error:", error);
       }
     };
+
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
