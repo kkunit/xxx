@@ -1,132 +1,155 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
+import React, { useEffect, useMemo, useState } from 'react';
+import { getApps, initializeApp } from 'firebase/app';
 import {
   getAuth,
-  signInAnonymously,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithCustomToken
 } from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  onSnapshot, 
-  query
-} from 'firebase/firestore';
-import { 
-  Heart, 
-  Send, 
-  Lock, 
-  Mail, 
-  Sparkles, 
-  Candy, 
-  Unlock,
+import { getFirestore, collection, addDoc, onSnapshot, query } from 'firebase/firestore';
+import {
+  Candy,
+  Heart,
+  Info,
+  Lock,
+  Mail,
+  Send,
   Share2,
-  Info
+  Sparkles,
+  Unlock
 } from 'lucide-react';
 
-// --- IMPORTANT: Firebase Initialization ---
-// Prefer environment variables so deployments can override the defaults.
-// When they are not provided (for example in a static hosting setup),
-// we fall back to the known Firebase project configuration or values injected
-// at runtime (such as window.__firebase_config from the legacy build).
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyAxoiJDaMlrgVcxoFx20jcNoZ3drYROsxk',
+  authDomain: 'kkkk-ed5ea.firebaseapp.com',
+  projectId: 'kkkk-ed5ea',
+  storageBucket: 'kkkk-ed5ea.firebasestorage.app',
+  messagingSenderId: '430553604960',
+  appId: '1:430553604960:web:7aec087fdd169ccd123405',
+  measurementId: 'G-SN2216JTKY'
+};
 
-const getRuntimeConfig = () => {
-  if (typeof globalThis === 'undefined') return undefined;
-  const rawConfig = globalThis.__firebase_config;
-  if (!rawConfig) return undefined;
-  if (typeof rawConfig === 'string') {
+const REQUIRED_CONFIG_KEYS = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+
+const readRuntimeConfig = () => {
+  if (typeof globalThis === 'undefined') {
+    return undefined;
+  }
+
+  const value = globalThis.__firebase_config;
+  if (!value) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
     try {
-      return JSON.parse(rawConfig);
+      return JSON.parse(value);
     } catch (error) {
       console.warn('Unable to parse runtime Firebase config string:', error);
       return undefined;
     }
   }
-  return rawConfig;
+
+  return value;
 };
 
-const runtimeConfig = getRuntimeConfig();
+const resolveFirebaseConfig = () => {
+  const runtime = readRuntimeConfig();
+  const config = {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || runtime?.apiKey || DEFAULT_FIREBASE_CONFIG.apiKey,
+    authDomain:
+      import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || runtime?.authDomain || DEFAULT_FIREBASE_CONFIG.authDomain,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || runtime?.projectId || DEFAULT_FIREBASE_CONFIG.projectId,
+    storageBucket:
+      import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || runtime?.storageBucket || DEFAULT_FIREBASE_CONFIG.storageBucket,
+    messagingSenderId:
+      import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
+      runtime?.messagingSenderId ||
+      DEFAULT_FIREBASE_CONFIG.messagingSenderId,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || runtime?.appId || DEFAULT_FIREBASE_CONFIG.appId,
+    measurementId:
+      import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || runtime?.measurementId || DEFAULT_FIREBASE_CONFIG.measurementId
+  };
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || runtimeConfig?.apiKey || 'AIzaSyAxoiJDaMlrgVcxoFx20jcNoZ3drYROsxk',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || runtimeConfig?.authDomain || 'kkkk-ed5ea.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || runtimeConfig?.projectId || 'kkkk-ed5ea',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || runtimeConfig?.storageBucket || 'kkkk-ed5ea.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || runtimeConfig?.messagingSenderId || '430553604960',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || runtimeConfig?.appId || '1:430553604960:web:7aec087fdd169ccd123405',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || runtimeConfig?.measurementId || 'G-SN2216JTKY'
+  const hasAllKeys = REQUIRED_CONFIG_KEYS.every((key) => Boolean(config[key]));
+  return hasAllKeys ? config : null;
 };
 
-const requiredConfigKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
-const isFirebaseConfigured = requiredConfigKeys.every((key) => firebaseConfig[key]);
+const firebaseConfig = resolveFirebaseConfig();
 
-let app;
-let auth;
-let db;
+let app = null;
+let auth = null;
+let db = null;
 
-if (isFirebaseConfigured) {
-  app = initializeApp(firebaseConfig);
+if (firebaseConfig) {
+  const existing = getApps()[0];
+  app = existing || initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
 } else {
   console.warn('Firebase configuration is missing. Please check your environment variables.');
 }
 
-const runtimeAppId = typeof globalThis !== 'undefined' ? globalThis.__app_id : undefined;
-// Use the project ID as a unique identifier for data storage
-const uniqueAppId = runtimeAppId || firebaseConfig.projectId || 'default-app-id';
+const resolveAppId = () => {
+  if (typeof globalThis !== 'undefined' && globalThis.__app_id) {
+    return globalThis.__app_id;
+  }
+  return firebaseConfig?.projectId || 'default-app-id';
+};
 
-export default function App() { // Renamed to App for the Vite structure
+export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('write');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const configError = !isFirebaseConfigured;
-  
   const [senderName, setSenderName] = useState('');
   const [messageContent, setMessageContent] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
-
   const [adminCode, setAdminCode] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showShareHelp, setShowShareHelp] = useState(false);
 
-  // NOTE: In a real app, the SECRET_CODE should be stored securely, not in the frontend code.
-  const SECRET_CODE = "520";
+  const configError = !firebaseConfig;
+  const SECRET_CODE = '520';
 
-  const cardThemes = [
-    {
-      wrapper: 'bg-pink-50/80 border border-pink-200',
-      badge: 'bg-pink-200/80 text-pink-800'
-    },
-    {
-      wrapper: 'bg-purple-50/80 border border-purple-200',
-      badge: 'bg-purple-200/70 text-purple-800'
-    },
-    {
-      wrapper: 'bg-orange-50/80 border border-orange-200',
-      badge: 'bg-orange-200/80 text-orange-800'
-    }
-  ];
+  const uniqueAppId = useMemo(resolveAppId, []);
+
+  const cardThemes = useMemo(
+    () => [
+      {
+        wrapper: 'bg-pink-50/80 border border-pink-200',
+        badge: 'bg-pink-200/80 text-pink-800'
+      },
+      {
+        wrapper: 'bg-purple-50/80 border border-purple-200',
+        badge: 'bg-purple-200/70 text-purple-800'
+      },
+      {
+        wrapper: 'bg-orange-50/80 border border-orange-200',
+        badge: 'bg-orange-200/80 text-orange-800'
+      }
+    ],
+    []
+  );
 
   const resolveTheme = (index = 0) => cardThemes[index % cardThemes.length];
 
-  // 1. Auth Setup
   useEffect(() => {
-    if (configError || !auth) return;
+    if (configError || !auth) {
+      return undefined;
+    }
 
     const initAuth = async () => {
       try {
-        const initialToken = typeof globalThis !== 'undefined' ? globalThis.__initial_auth_token : undefined;
+        const initialToken =
+          typeof globalThis !== 'undefined' ? globalThis.__initial_auth_token : undefined;
         if (initialToken) {
           await signInWithCustomToken(auth, initialToken);
         } else if (!auth.currentUser) {
-          // Attempt to sign in anonymously (default behavior for public users)
           await signInAnonymously(auth);
         }
       } catch (error) {
-        console.error("Firebase auth error:", error);
+        console.error('Firebase auth error:', error);
       }
     };
 
@@ -135,34 +158,42 @@ export default function App() { // Renamed to App for the Vite structure
     return () => unsubscribe();
   }, [auth, configError]);
 
-  // 2. Data Fetching
   useEffect(() => {
-    if (configError || !db) return;
-    if (!user || view !== 'read' || !isUnlocked) return;
+    if (configError || !db) {
+      return undefined;
+    }
+    if (!user || view !== 'read' || !isUnlocked) {
+      return undefined;
+    }
 
-    // Data stored in a public collection path using the unique project ID
-    const q = query(collection(db, 'artifacts', uniqueAppId, 'public', 'data', 'sugar_messages'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      msgs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      setMessages(msgs);
-    }, (error) => {
-      console.error("Error fetching messages:", error);
-    });
+    const messagesQuery = query(collection(db, 'artifacts', uniqueAppId, 'public', 'data', 'sugar_messages'));
+    const unsubscribe = onSnapshot(
+      messagesQuery,
+      (snapshot) => {
+        const nextMessages = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        setMessages(nextMessages);
+      },
+      (error) => {
+        console.error('Error fetching messages:', error);
+      }
+    );
 
     return () => unsubscribe();
-  }, [db, user, view, isUnlocked, uniqueAppId, configError]);
+  }, [configError, db, isUnlocked, uniqueAppId, user, view]);
 
-  // 3. Send Message
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!messageContent.trim()) return;
+  const handleSend = async (event) => {
+    event.preventDefault();
+    if (!messageContent.trim()) {
+      return;
+    }
+
     if (configError || !db || !auth) {
-      alert("发送功能暂时不可用，请稍后再试~");
+      alert('发送功能暂时不可用，请稍后再试~');
       return;
     }
 
@@ -173,8 +204,8 @@ export default function App() { // Renamed to App for the Vite structure
         activeUser = credential.user;
         setUser(activeUser);
       } catch (error) {
-        console.error("Firebase Anonymous Auth error:", error);
-        alert("登陆遇到了一点小问题，请刷新后再试~");
+        console.error('Firebase Anonymous Auth error:', error);
+        alert('登陆遇到了一点小问题，请刷新后再试~');
         return;
       }
     }
@@ -185,43 +216,43 @@ export default function App() { // Renamed to App for the Vite structure
         name: senderName.trim() || '匿名小可爱',
         content: messageContent,
         timestamp: Date.now(),
-        theme: Math.floor(Math.random() * 3)
+        theme: Math.floor(Math.random() * cardThemes.length)
       });
-      
+
       setShowSuccess(true);
       setSenderName('');
       setMessageContent('');
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
-      console.error("Error sending message:", error);
-      alert("发送遇到了一点小问题，请刷新后再试~");
+      console.error('Error sending message:', error);
+      alert('发送遇到了一点小问题，请刷新后再试~');
     } finally {
       setLoading(false);
     }
   };
 
-  // 4. Unlock Logic
-  const handleUnlock = (e) => {
-    e.preventDefault();
+  const handleUnlock = (event) => {
+    event.preventDefault();
     if (adminCode === SECRET_CODE) {
       setIsUnlocked(true);
       setAdminCode('');
     } else {
-      alert("暗号不对哦！");
+      alert('暗号不对哦！');
     }
   };
 
-  // --- UI Styles ---
   const bgStyle = {
     backgroundImage: `radial-gradient(#fbcfe8 1px, transparent 1px), radial-gradient(#fbcfe8 1px, transparent 1px)`,
     backgroundSize: '20px 20px',
     backgroundPosition: '0 0, 10px 10px',
-    backgroundColor: '#fff1f2' 
+    backgroundColor: '#fff1f2'
   };
 
   return (
-    <div style={bgStyle} className="min-h-screen w-full flex flex-col items-center font-sans text-slate-700 relative overflow-hidden selection:bg-pink-200">
-
+    <div
+      style={bgStyle}
+      className="min-h-screen w-full flex flex-col items-center font-sans text-slate-700 relative overflow-hidden selection:bg-pink-200"
+    >
       {configError && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white">
           <div className="max-w-md mx-auto text-center space-y-4 px-6">
@@ -237,25 +268,29 @@ export default function App() { // Renamed to App for the Vite structure
           </div>
         </div>
       )}
-      
-      {/* Share Help Modal */}
+
       {showShareHelp && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowShareHelp(false)}>
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border-4 border-pink-200 animate-bounce-in" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm"
+          onClick={() => setShowShareHelp(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border-4 border-pink-200 animate-bounce-in"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h3 className="text-xl font-bold text-pink-600 mb-3 flex items-center gap-2">
               <Info size={24} /> 如何发给朋友？
             </h3>
             <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
               <p>
-                <span className="font-bold text-gray-800">这是可以分享的正式链接！</span><br/>
+                <span className="font-bold text-gray-800">这是可以分享的正式链接！</span>
+                <br />
                 如果你是在 Vercel 上部署的，复制你浏览器地址栏的 `https://你的项目名.vercel.app` 网址即可。
               </p>
-              <hr className="border-dashed border-pink-200"/>
-              <p className="bg-pink-50 p-2 rounded-lg text-pink-700 text-xs">
-                温馨提示：主人的信箱暗号是 **520** 哦！
-              </p>
+              <hr className="border-dashed border-pink-200" />
+              <p className="bg-pink-50 p-2 rounded-lg text-pink-700 text-xs">温馨提示：主人的信箱暗号是 **520** 哦！</p>
             </div>
-            <button 
+            <button
               onClick={() => setShowShareHelp(false)}
               className="w-full mt-5 bg-pink-500 text-white py-3 rounded-xl font-bold shadow-md hover:bg-pink-600 transition-colors"
             >
@@ -265,7 +300,6 @@ export default function App() { // Renamed to App for the Vite structure
         </div>
       )}
 
-      {/* Decorative Background Elements */}
       <div className="absolute top-10 left-10 text-pink-200 animate-bounce delay-700 select-none pointer-events-none">
         <Heart size={40} fill="currentColor" />
       </div>
@@ -273,13 +307,12 @@ export default function App() { // Renamed to App for the Vite structure
         <Candy size={50} />
       </div>
 
-      {/* Header */}
       <header className="w-full max-w-3xl p-4 md:p-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-pink-100">
           <Mail className="text-pink-500" size={20} />
           <span className="font-bold text-pink-600 tracking-wider">糖果信箱</span>
         </div>
-        
+
         <div className="flex flex-wrap gap-2 justify-end">
           <button
             type="button"
@@ -336,7 +369,7 @@ export default function App() { // Renamed to App for the Vite structure
                   <label className="block text-sm font-medium text-pink-600 mb-2">你的昵称（可选）</label>
                   <input
                     value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
+                    onChange={(event) => setSenderName(event.target.value)}
                     placeholder="写下你的名字或留空匿名"
                     className="w-full px-4 py-3 rounded-2xl border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400"
                     maxLength={30}
@@ -347,7 +380,7 @@ export default function App() { // Renamed to App for the Vite structure
                   <label className="block text-sm font-medium text-pink-600 mb-2">想对 TA 说的话</label>
                   <textarea
                     value={messageContent}
-                    onChange={(e) => setMessageContent(e.target.value)}
+                    onChange={(event) => setMessageContent(event.target.value)}
                     placeholder="把心里话写下来，主人才看得到哦~"
                     className="w-full px-4 py-3 rounded-2xl border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400 min-h-[160px]"
                     maxLength={600}
@@ -376,11 +409,7 @@ export default function App() { // Renamed to App for the Vite structure
           {view === 'read' && (
             <div className="relative">
               <div className="flex items-center gap-3 mb-6">
-                {isUnlocked ? (
-                  <Unlock className="text-purple-500" size={28} />
-                ) : (
-                  <Lock className="text-purple-500" size={28} />
-                )}
+                {isUnlocked ? <Unlock className="text-purple-500" size={28} /> : <Lock className="text-purple-500" size={28} />}
                 <div>
                   <h1 className="text-2xl md:text-3xl font-bold text-purple-600">打开信箱看看留言</h1>
                   <p className="text-sm text-gray-500 mt-1">输入主人设置的暗号后，才能看到大家留下的心意。</p>
@@ -394,7 +423,7 @@ export default function App() { // Renamed to App for the Vite structure
                     <input
                       type="password"
                       value={adminCode}
-                      onChange={(e) => setAdminCode(e.target.value)}
+                      onChange={(event) => setAdminCode(event.target.value)}
                       placeholder="只有主人知道的小秘密"
                       className="w-full px-4 py-3 rounded-2xl border border-purple-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-purple-400"
                     />
@@ -427,7 +456,9 @@ export default function App() { // Renamed to App for the Vite structure
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-base font-semibold text-gray-800">{msg.name || '匿名小可爱'}</span>
-                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badge}`}>甜度 +{(msg.theme ?? 0) % cardThemes.length + 1}</span>
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badge}`}>
+                                  甜度 +{((msg.theme ?? 0) % cardThemes.length) + 1}
+                                </span>
                               </div>
                               <span className="text-xs text-gray-400">{displayTime}</span>
                             </div>
