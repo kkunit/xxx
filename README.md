@@ -77,3 +77,35 @@
 - Vercel 上检查 **Deployments** 日志：能看到 `npm run build` 成功完成。
 
 搞定！以后若更换 Firebase 项目，只要更新这 6 个变量即可。
+
+## 5. PR 出现冲突时怎么办？
+
+当你在 Vercel 或 GitHub 上看到 “This branch has conflicts that must be resolved” 的提示时，说明你当前分支里的一些文件版本已经落后于主分支（通常是 `main` 或 `master`）。可以按照下面的步骤解决：
+
+1. **在本地拉取最新的主分支**
+   ```bash
+   git fetch origin
+   git checkout main           # 或者 master，取决于仓库默认分支
+   git pull origin main
+   ```
+
+2. **切回你的功能分支并合并主分支最新代码**
+   ```bash
+   git checkout <your-branch>
+   git merge origin/main       # 如果默认分支是 master 就改成 origin/master
+   ```
+
+   如果出现冲突，Git 会在文件中用 `<<<<<<<` / `=======` / `>>>>>>>` 标记冲突的两种版本。手动编辑这些文件，保留你真正想要的内容，删除冲突标记后保存。
+
+3. **确认修复冲突并提交**
+   ```bash
+   git add <file-with-conflict>
+   git commit
+   ```
+
+4. **把解决后的结果推送上去**
+   ```bash
+   git push origin <your-branch>
+   ```
+
+刷新 Pull Request 页面，冲突提示就会消失，Vercel 也会重新触发部署。如果你使用的是 GitHub 的 “Resolve conflicts” 在线编辑器，也可以直接在网页上完成以上步骤。
