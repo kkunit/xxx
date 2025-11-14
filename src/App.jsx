@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged,
-  signInWithCustomToken
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -60,9 +59,26 @@ export default function App() { // Renamed to App for the Vite structure
   const [adminCode, setAdminCode] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showShareHelp, setShowShareHelp] = useState(false);
-  
+
   // NOTE: In a real app, the SECRET_CODE should be stored securely, not in the frontend code.
-  const SECRET_CODE = "520"; 
+  const SECRET_CODE = "520";
+
+  const cardThemes = [
+    {
+      wrapper: 'bg-pink-50/80 border border-pink-200',
+      badge: 'bg-pink-200/80 text-pink-800'
+    },
+    {
+      wrapper: 'bg-purple-50/80 border border-purple-200',
+      badge: 'bg-purple-200/70 text-purple-800'
+    },
+    {
+      wrapper: 'bg-orange-50/80 border border-orange-200',
+      badge: 'bg-orange-200/80 text-orange-800'
+    }
+  ];
+
+  const resolveTheme = (index = 0) => cardThemes[index % cardThemes.length];
 
   // 1. Auth Setup
   useEffect(() => {
@@ -161,7 +177,7 @@ export default function App() { // Renamed to App for the Vite structure
             <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
               <p>
                 <span className="font-bold text-gray-800">这是可以分享的正式链接！</span><br/>
-                如果你是在 Vercel 上部署的，复制你浏览器地址栏的 `https://<你的项目名>.vercel.app` 网址即可。
+                如果你是在 Vercel 上部署的，复制你浏览器地址栏的 `https://你的项目名.vercel.app` 网址即可。
               </p>
               <hr className="border-dashed border-pink-200"/>
               <p className="bg-pink-50 p-2 rounded-lg text-pink-700 text-xs">
@@ -193,5 +209,169 @@ export default function App() { // Renamed to App for the Vite structure
           <span className="font-bold text-pink-600 tracking-wider">糖果信箱</span>
         </div>
         
-        <div className="flex gap-2">
-          <bu
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button
+            type="button"
+            onClick={() => setView('write')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors shadow-sm ${
+              view === 'write'
+                ? 'bg-pink-500 text-white border-pink-500 shadow-lg'
+                : 'bg-white/80 text-pink-500 border-pink-200 hover:bg-pink-50'
+            }`}
+          >
+            <Sparkles size={18} />
+            <span>写一封甜甜的信</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('read')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors shadow-sm ${
+              view === 'read'
+                ? 'bg-purple-500 text-white border-purple-500 shadow-lg'
+                : 'bg-white/80 text-purple-500 border-purple-200 hover:bg-purple-50'
+            }`}
+          >
+            <Mail size={18} />
+            <span>看看大家的留言</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowShareHelp(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-amber-200 bg-amber-50/80 text-amber-600 hover:bg-amber-100 transition-colors shadow-sm"
+          >
+            <Share2 size={18} />
+            <span>如何分享？</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="w-full max-w-3xl px-4 pb-16 z-10">
+        <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-pink-100 p-6 md:p-10 relative overflow-hidden">
+          <div className="absolute -top-10 -right-6 w-36 h-36 bg-pink-200/40 rounded-full blur-3xl" aria-hidden="true" />
+          <div className="absolute -bottom-16 -left-10 w-40 h-40 bg-purple-200/40 rounded-full blur-3xl" aria-hidden="true" />
+
+          {view === 'write' && (
+            <div className="relative">
+              <div className="flex items-center gap-3 mb-6">
+                <Send className="text-pink-500" size={28} />
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-bold text-pink-600">写下你想说的悄悄话</h1>
+                  <p className="text-sm text-gray-500 mt-1">留言会被放进主人的糖果信箱里，等 TA 来开启惊喜！</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSend} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-pink-600 mb-2">你的昵称（可选）</label>
+                  <input
+                    value={senderName}
+                    onChange={(e) => setSenderName(e.target.value)}
+                    placeholder="写下你的名字或留空匿名"
+                    className="w-full px-4 py-3 rounded-2xl border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400"
+                    maxLength={30}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-pink-600 mb-2">想对 TA 说的话</label>
+                  <textarea
+                    value={messageContent}
+                    onChange={(e) => setMessageContent(e.target.value)}
+                    placeholder="把心里话写下来，主人才看得到哦~"
+                    className="w-full px-4 py-3 rounded-2xl border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400 min-h-[160px]"
+                    maxLength={600}
+                  />
+                  <p className="mt-2 text-xs text-gray-400">字数上限 600 字，支持换行～</p>
+                </div>
+
+                {showSuccess && (
+                  <div className="flex items-center gap-2 text-green-600 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
+                    <Heart size={18} className="text-green-500" />
+                    <span>甜甜的留言已投入信箱，感谢你的分享！</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex justify-center items-center gap-2 bg-pink-500 hover:bg-pink-600 text-white font-semibold py-3 rounded-2xl shadow-lg transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {loading ? '发送中...' : '发送这封糖果信'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {view === 'read' && (
+            <div className="relative">
+              <div className="flex items-center gap-3 mb-6">
+                {isUnlocked ? (
+                  <Unlock className="text-purple-500" size={28} />
+                ) : (
+                  <Lock className="text-purple-500" size={28} />
+                )}
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-bold text-purple-600">打开信箱看看留言</h1>
+                  <p className="text-sm text-gray-500 mt-1">输入主人设置的暗号后，才能看到大家留下的心意。</p>
+                </div>
+              </div>
+
+              {!isUnlocked ? (
+                <form onSubmit={handleUnlock} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-purple-600 mb-2">输入暗号</label>
+                    <input
+                      type="password"
+                      value={adminCode}
+                      onChange={(e) => setAdminCode(e.target.value)}
+                      placeholder="只有主人知道的小秘密"
+                      className="w-full px-4 py-3 rounded-2xl border border-purple-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full flex justify-center items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 rounded-2xl shadow-lg transition-colors"
+                  >
+                    <Unlock size={18} />
+                    <span>开启信箱</span>
+                  </button>
+                  <p className="text-xs text-gray-400 text-center">暗号对啦就能解锁，忘记的话去问问 TA 哦～</p>
+                </form>
+              ) : (
+                <div className="space-y-5">
+                  {messages.length === 0 ? (
+                    <div className="text-center bg-white/70 border border-dashed border-purple-200 rounded-3xl py-16 px-6">
+                      <Sparkles className="mx-auto text-purple-300 mb-4" size={32} />
+                      <p className="text-gray-500">暂时还没有收到留言，快邀请朋友来写下第一封吧！</p>
+                    </div>
+                  ) : (
+                    <ul className="space-y-4 max-h-[420px] overflow-y-auto pr-2">
+                      {messages.map((msg) => {
+                        const { wrapper, badge } = resolveTheme(msg.theme ?? 0);
+                        const displayTime = msg.timestamp
+                          ? new Date(msg.timestamp).toLocaleString('zh-CN', { hour12: false })
+                          : '刚刚';
+                        return (
+                          <li key={msg.id} className={`rounded-3xl p-5 shadow-sm backdrop-blur-sm ${wrapper}`}>
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base font-semibold text-gray-800">{msg.name || '匿名小可爱'}</span>
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badge}`}>甜度 +{(msg.theme ?? 0) % cardThemes.length + 1}</span>
+                              </div>
+                              <span className="text-xs text-gray-400">{displayTime}</span>
+                            </div>
+                            <p className="mt-3 text-gray-700 whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
