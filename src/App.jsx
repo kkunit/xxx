@@ -165,14 +165,26 @@ export default function App() { // Renamed to App for the Vite structure
   const handleSend = async (e) => {
     e.preventDefault();
     if (!messageContent.trim()) return;
-    if (!user) return;
-    if (!firebaseServices?.db) {
+    if (!firebaseServices?.db || !firebaseServices?.auth) {
       alert("Firebase 尚未正确初始化，请稍后重试或检查配置。");
       return;
     }
 
     setLoading(true);
     try {
+      let activeUser = user;
+      if (!activeUser) {
+        try {
+          const credential = await signInAnonymously(firebaseServices.auth);
+          activeUser = credential.user;
+          setUser(credential.user);
+        } catch (authError) {
+          console.error("发送前尝试登录失败:", authError);
+          alert("还在为你连接糖果信箱，请稍后再试一次哦～");
+          return;
+        }
+      }
+
       await addDoc(collection(firebaseServices.db, 'artifacts', uniqueAppId, 'public', 'data', 'sugar_messages'), {
         name: senderName.trim() || '匿名小可爱',
         content: messageContent,
