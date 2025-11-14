@@ -82,6 +82,8 @@
 
 当你在 Vercel 或 GitHub 上看到 “This branch has conflicts that must be resolved” 的提示时，说明你当前分支里的一些文件版本已经落后于主分支（通常是 `main` 或 `master`）。可以按照下面的步骤解决：
 
+### ✅ 有命令行环境时
+
 1. **在本地拉取最新的主分支**
    ```bash
    git fetch origin
@@ -108,4 +110,15 @@
    git push origin <your-branch>
    ```
 
-刷新 Pull Request 页面，冲突提示就会消失，Vercel 也会重新触发部署。如果你使用的是 GitHub 的 “Resolve conflicts” 在线编辑器，也可以直接在网页上完成以上步骤。
+刷新 Pull Request 页面，冲突提示就会消失，Vercel 也会重新触发部署。
+
+### 📱 只有手机或网页时
+
+1. **在 Pull Request 页面点击 “Resolve conflicts”**：GitHub 会在浏览器里打开冲突编辑器。
+2. **逐个文件向下滑动，找到 `<<<<<<<` 标记**：每个冲突块上方有两种版本，左侧是主分支，右侧是你当前分支的改动。
+3. **手动编辑成想要的内容**：删掉不需要的行以及所有 `<<<<<<<` / `=======` / `>>>>>>>` 标记，只保留最终结果。
+4. **点右上角的 “Mark as resolved”**：冲突文件改完后，点击按钮确认。
+5. **全部文件都标记完成后，点击 “Commit merge”**：GitHub 会为你自动创建一次合并提交。
+6. **返回 Pull Request**：页面会显示冲突已解决，CI / 部署会重新运行。如果需要继续修改，可以直接在网页里使用 “Edit file” 按钮。
+
+> 提示：手机浏览器里同样可以使用 GitHub 的冲突编辑器，横屏能看得更清楚；如有需要也可以切换到 GitHub App，操作位置基本一致。
