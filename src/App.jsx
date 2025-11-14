@@ -3,6 +3,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import {
   getAuth,
   signInAnonymously,
+  signInWithCustomToken,
   onAuthStateChanged
 } from 'firebase/auth';
 import { 
@@ -25,13 +26,12 @@ import {
 } from 'lucide-react';
 
 // --- IMPORTANT: Firebase Initialization ---
-// Since we are deploying to a production environment (Vercel), 
-// we MUST use environment variables for Firebase configuration.
-// If you cannot use environment variables in your setup, 
-// replace the `process.env.VITE_...` with the actual string values 
-// you got from your Firebase project console.
+// 为了兼容此前依赖全局变量注入 (__firebase_config 等) 的部署方案，
+// 这里同时支持两种配置来源：
+// 1. 旧版本在 HTML/SSR 层注入的全局常量
+// 2. 通过 Vite 环境变量注入的 `VITE_FIREBASE_*`
 
-const firebaseConfig = {
+const envFirebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -49,14 +49,52 @@ const requiredFirebaseKeys = [
   'appId'
 ];
 
-const missingFirebaseKeys = requiredFirebaseKeys.filter((key) => {
-  const value = firebaseConfig[key];
+const missingEnvKeys = requiredFirebaseKeys.filter((key) => {
+  const value = envFirebaseConfig[key];
   return !value || value.toString().trim() === '';
 });
 
+let bootstrapFirebaseConfig = null;
+let bootstrapConfigError = null;
+
+try {
+  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+    const parsed =
+      typeof __firebase_config === 'string'
+        ? JSON.parse(__firebase_config)
+        : __firebase_config;
+    bootstrapFirebaseConfig = parsed;
+  }
+} catch (error) {
+  console.error('解析 __firebase_config 失败:', error);
+  bootstrapConfigError = '无法解析部署注入的 Firebase 配置，请检查 __firebase_config 是否为有效 JSON。';
+}
+
+if (!bootstrapFirebaseConfig && missingEnvKeys.length === 0) {
+  bootstrapFirebaseConfig = envFirebaseConfig;
+}
+
+const pendingMissingKeys = bootstrapFirebaseConfig ? [] : missingEnvKeys;
+const globalAppId =
+  typeof __app_id !== 'undefined' && __app_id ? __app_id : null;
+const initialAuthToken =
+  typeof __initial_auth_token !== 'undefined' && __initial_auth_token
+    ? __initial_auth_token
+    : null;
+
 export default function App() { // Renamed to App for the Vite structure
   const [firebaseServices, setFirebaseServices] = useState(null);
-  const [firebaseError, setFirebaseError] = useState(null);
+  const [firebaseError, setFirebaseError] = useState(() => {
+    if (bootstrapConfigError) {
+      return bootstrapConfigError;
+    }
+    if (pendingMissingKeys.length > 0) {
+      return `缺少 Firebase 配置：${pendingMissingKeys
+        .map((key) => `VITE_FIREBASE_${key.toUpperCase()}`)
+        .join(', ')}`;
+    }
+    return null;
+  });
   const [user, setUser] = useState(null);
   const [view, setView] = useState('write');
   const [messages, setMessages] = useState([]);
@@ -91,21 +129,27 @@ export default function App() { // Renamed to App for the Vite structure
 
   const resolveTheme = (index = 0) => cardThemes[index % cardThemes.length];
 
-  const uniqueAppId = firebaseServices?.projectId || 'default-app-id';
+  const uniqueAppId =
+    globalAppId ||
+    firebaseServices?.projectId ||
+    bootstrapFirebaseConfig?.projectId ||
+    'default-app-id';
 
   // 0. Firebase Initialization
   useEffect(() => {
-    if (missingFirebaseKeys.length > 0) {
-      setFirebaseError(
-        `缺少 Firebase 配置：${missingFirebaseKeys
-          .map((key) => `VITE_FIREBASE_${key.toUpperCase()}`)
-          .join(', ')}`
-      );
+    if (!bootstrapFirebaseConfig) {
+      if (!bootstrapConfigError && pendingMissingKeys.length > 0) {
+        setFirebaseError(
+          `缺少 Firebase 配置：${pendingMissingKeys
+            .map((key) => `VITE_FIREBASE_${key.toUpperCase()}`)
+            .join(', ')}`
+        );
+      }
       return;
     }
 
     try {
-      const appInstance = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+      const appInstance = getApps().length > 0 ? getApps()[0] : initializeApp(bootstrapFirebaseConfig);
       const authInstance = getAuth(appInstance);
       const dbInstance = getFirestore(appInstance);
 
@@ -113,7 +157,7 @@ export default function App() { // Renamed to App for the Vite structure
         app: appInstance,
         auth: authInstance,
         db: dbInstance,
-        projectId: firebaseConfig.projectId
+        projectId: bootstrapFirebaseConfig?.projectId
       });
       setFirebaseError(null);
     } catch (error) {
@@ -130,8 +174,12 @@ export default function App() { // Renamed to App for the Vite structure
     // We sign in anonymously for public users, and rely on the UI to handle the admin login.
     const initAuth = async () => {
       try {
-        // Attempt to sign in anonymously (default behavior for public users)
-        await signInAnonymously(firebaseServices.auth);
+        if (initialAuthToken) {
+          await signInWithCustomToken(firebaseServices.auth, initialAuthToken);
+        } else {
+          // Attempt to sign in anonymously (default behavior for public users)
+          await signInAnonymously(firebaseServices.auth);
+        }
       } catch (error) {
         console.error("Firebase Anonymous Auth error:", error);
       }
@@ -177,7 +225,9 @@ export default function App() { // Renamed to App for the Vite structure
       let activeUser = user;
       if (!activeUser) {
         try {
-          const credential = await signInAnonymously(firebaseServices.auth);
+          const credential = initialAuthToken
+            ? await signInWithCustomToken(firebaseServices.auth, initialAuthToken)
+            : await signInAnonymously(firebaseServices.auth);
           activeUser = credential.user;
           setUser(credential.user);
         } catch (authError) {
