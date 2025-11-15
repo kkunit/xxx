@@ -8,14 +8,15 @@ import {
 } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, query } from 'firebase/firestore';
 import {
-  Candy,
-  Heart,
+  Feather,
   Info,
   Lock,
   Mail,
-  Send,
+  MoonStar,
   Share2,
   Sparkles,
+  Star,
+  Stars,
   Unlock
 } from 'lucide-react';
 
@@ -115,31 +116,73 @@ export default function App() {
   const [adminCode, setAdminCode] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showShareHelp, setShowShareHelp] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [copyState, setCopyState] = useState('idle');
+  const [authErrorMessage, setAuthErrorMessage] = useState('');
 
   const configError = !firebaseConfig;
   const SECRET_CODE = '520';
 
   const uniqueAppId = useMemo(resolveAppId, []);
+  const canUseNavigator = typeof navigator !== 'undefined';
+  const canUseShare = canUseNavigator && typeof navigator.share === 'function';
 
   const cardThemes = useMemo(
     () => [
       {
-        wrapper: 'bg-pink-50/80 border border-pink-200',
-        badge: 'bg-pink-200/80 text-pink-800'
+        wrapper: 'bg-indigo-50/80 border border-indigo-200',
+        badge: 'bg-indigo-200/80 text-indigo-800'
       },
       {
-        wrapper: 'bg-purple-50/80 border border-purple-200',
-        badge: 'bg-purple-200/70 text-purple-800'
+        wrapper: 'bg-sky-50/80 border border-sky-200',
+        badge: 'bg-sky-200/80 text-sky-800'
       },
       {
-        wrapper: 'bg-orange-50/80 border border-orange-200',
-        badge: 'bg-orange-200/80 text-orange-800'
+        wrapper: 'bg-amber-50/80 border border-amber-200',
+        badge: 'bg-amber-200/80 text-amber-800'
       }
     ],
     []
   );
 
   const resolveTheme = (index = 0) => cardThemes[index % cardThemes.length];
+
+  const getCurrentHostname = () => {
+    if (typeof window === 'undefined') {
+      return '当前域名';
+    }
+    return window.location.hostname;
+  };
+
+  const resolveAuthErrorMessage = (error) => {
+    if (!error) {
+      return '星星登录遇到了一点小问题，请刷新后再试~';
+    }
+
+    switch (error.code) {
+      case 'auth/operation-not-allowed':
+        return '需要在 Firebase 控制台的 Authentication → Sign-in method 中启用 Anonymous 登录方式。开启后重新部署即可正常使用。';
+      case 'auth/unauthorized-domain':
+        return `请在 Firebase 控制台的 Authentication → Settings → Authorized domains 中添加 ${getCurrentHostname()}，然后重新部署。`;
+      default:
+        return '星星登录遇到了一点小问题，请刷新后再试~';
+    }
+  };
+
+  const handleAuthError = (error) => {
+    console.error('Firebase auth error:', error);
+    const message = resolveAuthErrorMessage(error);
+    setAuthErrorMessage(message);
+    return message;
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    setShareUrl(window.location.href);
+  }, []);
 
   useEffect(() => {
     if (configError || !auth) {
@@ -156,7 +199,7 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (error) {
-        console.error('Firebase auth error:', error);
+        handleAuthError(error);
       }
     };
 
@@ -200,7 +243,7 @@ export default function App() {
     }
 
     if (configError || !db || !auth) {
-      alert('发送功能暂时不可用，请稍后再试~');
+      alert('星星信使暂时忙碌，请稍后再试~');
       return;
     }
 
@@ -211,8 +254,8 @@ export default function App() {
         activeUser = credential.user;
         setUser(activeUser);
       } catch (error) {
-        console.error('Firebase Anonymous Auth error:', error);
-        alert('登陆遇到了一点小问题，请刷新后再试~');
+        const message = handleAuthError(error);
+        alert(message);
         return;
       }
     }
@@ -220,7 +263,7 @@ export default function App() {
     setLoading(true);
     try {
       await addDoc(collection(db, 'artifacts', uniqueAppId, 'public', 'data', 'sugar_messages'), {
-        name: senderName.trim() || '匿名小可爱',
+        name: senderName.trim() || '匿名星友',
         content: messageContent,
         timestamp: Date.now(),
         theme: Math.floor(Math.random() * cardThemes.length)
@@ -232,7 +275,7 @@ export default function App() {
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
       console.error('Error sending message:', error);
-      alert('发送遇到了一点小问题，请刷新后再试~');
+      alert('星星邮差迷路了，请刷新后再试~');
     } finally {
       setLoading(false);
     }
@@ -244,32 +287,52 @@ export default function App() {
       setIsUnlocked(true);
       setAdminCode('');
     } else {
-      alert('暗号不对哦！');
+      alert('星星暗号不对哦！');
     }
   };
 
   const bgStyle = {
-    backgroundImage: `radial-gradient(#fbcfe8 1px, transparent 1px), radial-gradient(#fbcfe8 1px, transparent 1px)`,
-    backgroundSize: '20px 20px',
-    backgroundPosition: '0 0, 10px 10px',
-    backgroundColor: '#fff1f2'
+    backgroundImage:
+      'linear-gradient(135deg, rgba(244, 228, 255, 0.96) 0%, rgba(219, 234, 254, 0.96) 55%, rgba(255, 247, 237, 0.95) 100%), radial-gradient(#fde68a 1px, transparent 1px), radial-gradient(#fbcfe8 1px, transparent 1px)',
+    backgroundSize: '100% 100%, 32px 32px, 48px 48px',
+    backgroundPosition: 'center, 8px 12px, 24px 28px',
+    backgroundColor: '#f5f3ff'
   };
 
   return (
     <div
       style={bgStyle}
-      className="min-h-screen w-full flex flex-col items-center font-sans text-slate-700 relative overflow-hidden selection:bg-pink-200"
+      className="min-h-screen w-full flex flex-col items-center font-sans text-slate-700 relative overflow-hidden selection:bg-indigo-200/70"
     >
+      {authErrorMessage && (
+        <div className="fixed top-6 inset-x-0 flex justify-center z-[80] px-4">
+          <div className="max-w-xl w-full bg-white/90 border border-rose-200 text-rose-600 rounded-2xl shadow-lg px-4 py-3 flex flex-col gap-2">
+            <div className="flex items-center gap-2 font-semibold">
+              <Lock size={18} />
+              <span>登录配置提醒</span>
+            </div>
+            <p className="text-sm leading-relaxed">{authErrorMessage}</p>
+            <button
+              type="button"
+              onClick={() => setAuthErrorMessage('')}
+              className="self-end text-xs text-rose-500 hover:text-rose-600 transition-colors"
+            >
+              我知道啦
+            </button>
+          </div>
+        </div>
+      )}
+
       {configError && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white">
           <div className="max-w-md mx-auto text-center space-y-4 px-6">
             <div className="flex justify-center">
-              <Mail className="text-pink-500" size={48} />
+              <Mail className="text-indigo-500" size={48} />
             </div>
-            <h1 className="text-2xl font-bold text-pink-600">配置缺失</h1>
+            <h1 className="text-2xl font-bold text-indigo-600">配置缺失</h1>
             <p className="text-sm text-gray-600 leading-relaxed">
-              糖果信箱需要正确的 Firebase 配置才能工作。请在部署环境中设置
-              <code className="mx-1 px-1.5 py-0.5 rounded bg-pink-100 text-pink-700">VITE_FIREBASE_*</code>
+              星星信箱需要正确的 Firebase 配置才能工作。请在部署环境中设置
+              <code className="mx-1 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">VITE_FIREBASE_*</code>
               环境变量并重新部署。
             </p>
           </div>
@@ -282,24 +345,74 @@ export default function App() {
           onClick={() => setShowShareHelp(false)}
         >
           <div
-            className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border-4 border-pink-200 animate-bounce-in"
+            className="bg-gradient-to-br from-white via-indigo-50 to-amber-50 rounded-3xl p-6 max-w-sm w-full shadow-2xl border-4 border-indigo-200/80 ring-4 ring-white/60 animate-bounce-in"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-xl font-bold text-pink-600 mb-3 flex items-center gap-2">
-              <Info size={24} /> 如何发给朋友？
+            <h3 className="text-xl font-bold text-indigo-600 mb-3 flex items-center gap-2">
+              <Info size={24} /> 如何把星星信箱分享给朋友？
             </h3>
             <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
               <p>
-                <span className="font-bold text-gray-800">这是可以分享的正式链接！</span>
+                <span className="font-bold text-gray-800">这是可以分享的星星坐标！</span>
                 <br />
-                如果你是在 Vercel 上部署的，复制你浏览器地址栏的 `https://你的项目名.vercel.app` 网址即可。
+                复制下面的地址或者直接使用手机的分享面板，把星光邮差派给朋友吧～
               </p>
-              <hr className="border-dashed border-pink-200" />
-              <p className="bg-pink-50 p-2 rounded-lg text-pink-700 text-xs">温馨提示：主人的信箱暗号是 **520** 哦！</p>
+              {shareUrl ? (
+                <div className="bg-white/80 border border-indigo-200 rounded-2xl p-3 space-y-2 shadow-inner">
+                  <code className="block text-xs break-words text-indigo-700">{shareUrl}</code>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (typeof navigator === 'undefined' || !navigator.clipboard) {
+                          setCopyState('error');
+                          return;
+                        }
+                        try {
+                          await navigator.clipboard.writeText(shareUrl);
+                          setCopyState('copied');
+                          setTimeout(() => setCopyState('idle'), 2000);
+                        } catch (error) {
+                          console.error('复制链接失败', error);
+                          setCopyState('error');
+                        }
+                      }}
+                      className="flex-1 bg-indigo-500 text-white py-2 rounded-xl text-sm font-semibold shadow hover:bg-indigo-600 transition-colors"
+                    >
+                      {copyState === 'copied' ? '已复制 ✓' : '复制链接'}
+                    </button>
+                    {canUseShare && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.share({ title: '星星信箱', url: shareUrl });
+                          } catch (error) {
+                            if (error?.name !== 'AbortError') {
+                              console.error('调用分享面板失败', error);
+                            }
+                          }
+                        }}
+                        className="flex-1 bg-white text-indigo-500 border border-indigo-300 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-indigo-50 transition-colors"
+                      >
+                        打开分享面板
+                      </button>
+                    )}
+                  </div>
+                  {copyState === 'error' && (
+                    <p className="text-xs text-rose-500">浏览器不支持自动复制，请长按链接手动复制哦～</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">稍等一下，我们正在准备分享链接…</p>
+              )}
+              <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-xl p-2">
+                小贴士：暗号是主人才能分享的宇宙密码，别放在公开页面里，悄悄告诉收信的朋友就好～
+              </p>
             </div>
             <button
               onClick={() => setShowShareHelp(false)}
-              className="w-full mt-5 bg-pink-500 text-white py-3 rounded-xl font-bold shadow-md hover:bg-pink-600 transition-colors"
+              className="w-full mt-5 bg-indigo-500 text-white py-3 rounded-xl font-bold shadow-md hover:bg-indigo-600 transition-colors"
             >
               关闭
             </button>
@@ -307,17 +420,17 @@ export default function App() {
         </div>
       )}
 
-      <div className="absolute top-10 left-10 text-pink-200 animate-bounce delay-700 select-none pointer-events-none">
-        <Heart size={40} fill="currentColor" />
+      <div className="absolute top-10 left-8 text-indigo-200 animate-bounce delay-700 select-none pointer-events-none">
+        <Stars size={48} />
       </div>
-      <div className="absolute bottom-20 right-10 text-purple-200 animate-pulse select-none pointer-events-none">
-        <Candy size={50} />
+      <div className="absolute bottom-20 right-10 text-amber-200 animate-pulse select-none pointer-events-none">
+        <MoonStar size={52} />
       </div>
 
       <header className="w-full max-w-3xl p-4 md:p-6 flex justify-between items-center z-10">
-        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-pink-100">
-          <Mail className="text-pink-500" size={20} />
-          <span className="font-bold text-pink-600 tracking-wider">糖果信箱</span>
+        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-indigo-100">
+          <Mail className="text-indigo-500" size={20} />
+          <span className="font-bold text-indigo-600 tracking-wider">星星信箱</span>
         </div>
 
         <div className="flex flex-wrap gap-2 justify-end">
@@ -326,29 +439,29 @@ export default function App() {
             onClick={() => setView('write')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors shadow-sm ${
               view === 'write'
-                ? 'bg-pink-500 text-white border-pink-500 shadow-lg'
-                : 'bg-white/80 text-pink-500 border-pink-200 hover:bg-pink-50'
+                ? 'bg-indigo-500 text-white border-indigo-500 shadow-lg'
+                : 'bg-white/80 text-indigo-500 border-indigo-200 hover:bg-indigo-50'
             }`}
           >
             <Sparkles size={18} />
-            <span>写一封甜甜的信</span>
+            <span>写一封闪闪的信</span>
           </button>
           <button
             type="button"
             onClick={() => setView('read')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors shadow-sm ${
               view === 'read'
-                ? 'bg-purple-500 text-white border-purple-500 shadow-lg'
-                : 'bg-white/80 text-purple-500 border-purple-200 hover:bg-purple-50'
+                ? 'bg-amber-500 text-white border-amber-500 shadow-lg'
+                : 'bg-white/80 text-amber-500 border-amber-200 hover:bg-amber-50'
             }`}
           >
             <Mail size={18} />
-            <span>看看大家的留言</span>
+            <span>看看大家的星语</span>
           </button>
           <button
             type="button"
             onClick={() => setShowShareHelp(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-amber-200 bg-amber-50/80 text-amber-600 hover:bg-amber-100 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-sky-200 bg-sky-50/80 text-sky-600 hover:bg-sky-100 transition-colors shadow-sm"
           >
             <Share2 size={18} />
             <span>如何分享？</span>
@@ -357,57 +470,57 @@ export default function App() {
       </header>
 
       <main className="w-full max-w-3xl px-4 pb-16 z-10">
-        <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-pink-100 p-6 md:p-10 relative overflow-hidden">
-          <div className="absolute -top-10 -right-6 w-36 h-36 bg-pink-200/40 rounded-full blur-3xl" aria-hidden="true" />
-          <div className="absolute -bottom-16 -left-10 w-40 h-40 bg-purple-200/40 rounded-full blur-3xl" aria-hidden="true" />
+        <div className="bg-white/85 backdrop-blur-md rounded-3xl shadow-xl border border-indigo-100 p-6 md:p-10 relative overflow-hidden">
+          <div className="absolute -top-12 -right-8 w-40 h-40 bg-indigo-200/40 rounded-full blur-3xl" aria-hidden="true" />
+          <div className="absolute -bottom-16 -left-12 w-44 h-44 bg-amber-200/40 rounded-full blur-3xl" aria-hidden="true" />
 
           {view === 'write' && (
             <div className="relative">
               <div className="flex items-center gap-3 mb-6">
-                <Send className="text-pink-500" size={28} />
+                <Feather className="text-indigo-500" size={28} />
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-pink-600">写下你想说的悄悄话</h1>
-                  <p className="text-sm text-gray-500 mt-1">留言会被放进主人的糖果信箱里，等 TA 来开启惊喜！</p>
+                  <h1 className="text-2xl md:text-3xl font-bold text-indigo-600">写下想要寄出的星语</h1>
+                  <p className="text-sm text-gray-500 mt-1">留言会被装进主人的星星信箱，等 TA 来点亮银河！</p>
                 </div>
               </div>
 
               <form onSubmit={handleSend} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-pink-600 mb-2">你的昵称（可选）</label>
+                  <label className="block text-sm font-medium text-indigo-600 mb-2">你的昵称（可选）</label>
                   <input
                     value={senderName}
                     onChange={(event) => setSenderName(event.target.value)}
-                    placeholder="写下你的名字或留空匿名"
-                    className="w-full px-4 py-3 rounded-2xl border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400"
+                    placeholder="写下你的名字或留空匿名星友"
+                    className="w-full px-4 py-3 rounded-2xl border border-indigo-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     maxLength={30}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-pink-600 mb-2">想对 TA 说的话</label>
+                  <label className="block text-sm font-medium text-indigo-600 mb-2">想对 TA 说的话</label>
                   <textarea
                     value={messageContent}
                     onChange={(event) => setMessageContent(event.target.value)}
-                    placeholder="把心里话写下来，主人才看得到哦~"
-                    className="w-full px-4 py-3 rounded-2xl border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400 min-h-[160px]"
+                    placeholder="把心里话写下来，只有主人能在星空下读到哦~"
+                    className="w-full px-4 py-3 rounded-2xl border border-indigo-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-indigo-400 min-h-[160px]"
                     maxLength={600}
                   />
                   <p className="mt-2 text-xs text-gray-400">字数上限 600 字，支持换行～</p>
                 </div>
 
                 {showSuccess && (
-                  <div className="flex items-center gap-2 text-green-600 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
-                    <Heart size={18} className="text-green-500" />
-                    <span>甜甜的留言已投入信箱，感谢你的分享！</span>
+                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+                    <Star size={18} className="text-amber-500" />
+                    <span>闪亮的留言已飞向信箱，感谢你的星光！</span>
                   </div>
                 )}
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 bg-pink-500 hover:bg-pink-600 text-white font-semibold py-3 rounded-2xl shadow-lg transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="w-full flex justify-center items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 rounded-2xl shadow-lg transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {loading ? '发送中...' : '发送这封糖果信'}
+                  {loading ? '星光传送中...' : '发送这封星语'}
                 </button>
               </form>
             </div>
@@ -416,40 +529,40 @@ export default function App() {
           {view === 'read' && (
             <div className="relative">
               <div className="flex items-center gap-3 mb-6">
-                {isUnlocked ? <Unlock className="text-purple-500" size={28} /> : <Lock className="text-purple-500" size={28} />}
+                {isUnlocked ? <Unlock className="text-amber-500" size={28} /> : <Lock className="text-amber-500" size={28} />}
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-purple-600">打开信箱看看留言</h1>
-                  <p className="text-sm text-gray-500 mt-1">输入主人设置的暗号后，才能看到大家留下的心意。</p>
+                  <h1 className="text-2xl md:text-3xl font-bold text-amber-600">打开信箱看看星语</h1>
+                  <p className="text-sm text-gray-500 mt-1">输入主人设置的星星暗号后，才能看到大家留下的心意。</p>
                 </div>
               </div>
 
               {!isUnlocked ? (
                 <form onSubmit={handleUnlock} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-purple-600 mb-2">输入暗号</label>
+                    <label className="block text-sm font-medium text-amber-600 mb-2">输入星星暗号</label>
                     <input
                       type="password"
                       value={adminCode}
                       onChange={(event) => setAdminCode(event.target.value)}
                       placeholder="只有主人知道的小秘密"
-                      className="w-full px-4 py-3 rounded-2xl border border-purple-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      className="w-full px-4 py-3 rounded-2xl border border-amber-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-amber-400"
                     />
                   </div>
                   <button
                     type="submit"
-                    className="w-full flex justify-center items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 rounded-2xl shadow-lg transition-colors"
+                    className="w-full flex justify-center items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-2xl shadow-lg transition-colors"
                   >
                     <Unlock size={18} />
                     <span>开启信箱</span>
                   </button>
-                  <p className="text-xs text-gray-400 text-center">暗号对啦就能解锁，忘记的话去问问 TA 哦～</p>
+                  <p className="text-xs text-gray-400 text-center">暗号对啦就能解锁银河，忘记的话去问问 TA 哦～</p>
                 </form>
               ) : (
                 <div className="space-y-5">
                   {messages.length === 0 ? (
-                    <div className="text-center bg-white/70 border border-dashed border-purple-200 rounded-3xl py-16 px-6">
-                      <Sparkles className="mx-auto text-purple-300 mb-4" size={32} />
-                      <p className="text-gray-500">暂时还没有收到留言，快邀请朋友来写下第一封吧！</p>
+                    <div className="text-center bg-white/70 border border-dashed border-indigo-200 rounded-3xl py-16 px-6">
+                      <Sparkles className="mx-auto text-indigo-300 mb-4" size={32} />
+                      <p className="text-gray-500">暂时还没有收到星语，快邀请朋友来写下第一封吧！</p>
                     </div>
                   ) : (
                     <ul className="space-y-4 max-h-[420px] overflow-y-auto pr-2">
@@ -462,9 +575,9 @@ export default function App() {
                           <li key={msg.id} className={`rounded-3xl p-5 shadow-sm backdrop-blur-sm ${wrapper}`}>
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                               <div className="flex items-center gap-2">
-                                <span className="text-base font-semibold text-gray-800">{msg.name || '匿名小可爱'}</span>
+                                <span className="text-base font-semibold text-gray-800">{msg.name || '匿名星友'}</span>
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badge}`}>
-                                  甜度 +{((msg.theme ?? 0) % cardThemes.length) + 1}
+                                  星光 +{((msg.theme ?? 0) % cardThemes.length) + 1}
                                 </span>
                               </div>
                               <span className="text-xs text-gray-400">{displayTime}</span>
