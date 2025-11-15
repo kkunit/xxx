@@ -118,6 +118,7 @@ export default function App() {
   const [showShareHelp, setShowShareHelp] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [copyState, setCopyState] = useState('idle');
+  const [authErrorMessage, setAuthErrorMessage] = useState('');
 
   const configError = !firebaseConfig;
   const SECRET_CODE = '520';
@@ -146,6 +147,35 @@ export default function App() {
 
   const resolveTheme = (index = 0) => cardThemes[index % cardThemes.length];
 
+  const getCurrentHostname = () => {
+    if (typeof window === 'undefined') {
+      return '当前域名';
+    }
+    return window.location.hostname;
+  };
+
+  const resolveAuthErrorMessage = (error) => {
+    if (!error) {
+      return '星星登录遇到了一点小问题，请刷新后再试~';
+    }
+
+    switch (error.code) {
+      case 'auth/operation-not-allowed':
+        return '需要在 Firebase 控制台的 Authentication → Sign-in method 中启用 Anonymous 登录方式。开启后重新部署即可正常使用。';
+      case 'auth/unauthorized-domain':
+        return `请在 Firebase 控制台的 Authentication → Settings → Authorized domains 中添加 ${getCurrentHostname()}，然后重新部署。`;
+      default:
+        return '星星登录遇到了一点小问题，请刷新后再试~';
+    }
+  };
+
+  const handleAuthError = (error) => {
+    console.error('Firebase auth error:', error);
+    const message = resolveAuthErrorMessage(error);
+    setAuthErrorMessage(message);
+    return message;
+  };
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -169,7 +199,7 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (error) {
-        console.error('Firebase auth error:', error);
+        handleAuthError(error);
       }
     };
 
@@ -224,8 +254,8 @@ export default function App() {
         activeUser = credential.user;
         setUser(activeUser);
       } catch (error) {
-        console.error('Firebase Anonymous Auth error:', error);
-        alert('星星登录遇到了一点小问题，请刷新后再试~');
+        const message = handleAuthError(error);
+        alert(message);
         return;
       }
     }
@@ -274,6 +304,25 @@ export default function App() {
       style={bgStyle}
       className="min-h-screen w-full flex flex-col items-center font-sans text-slate-700 relative overflow-hidden selection:bg-indigo-200/70"
     >
+      {authErrorMessage && (
+        <div className="fixed top-6 inset-x-0 flex justify-center z-[80] px-4">
+          <div className="max-w-xl w-full bg-white/90 border border-rose-200 text-rose-600 rounded-2xl shadow-lg px-4 py-3 flex flex-col gap-2">
+            <div className="flex items-center gap-2 font-semibold">
+              <Lock size={18} />
+              <span>登录配置提醒</span>
+            </div>
+            <p className="text-sm leading-relaxed">{authErrorMessage}</p>
+            <button
+              type="button"
+              onClick={() => setAuthErrorMessage('')}
+              className="self-end text-xs text-rose-500 hover:text-rose-600 transition-colors"
+            >
+              我知道啦
+            </button>
+          </div>
+        </div>
+      )}
+
       {configError && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white">
           <div className="max-w-md mx-auto text-center space-y-4 px-6">
