@@ -122,3 +122,13 @@
 6. **返回 Pull Request**：页面会显示冲突已解决，CI / 部署会重新运行。如果需要继续修改，可以直接在网页里使用 “Edit file” 按钮。
 
 > 提示：手机浏览器里同样可以使用 GitHub 的冲突编辑器，横屏能看得更清楚；如有需要也可以切换到 GitHub App，操作位置基本一致。
+## 6. 使用 GitHub Pages 自动部署（替代 Vercel）
+
+仓库新增的 `.github/workflows/deploy.yml` 会在 `main` 分支 push 或手动触发后执行 `npm run build`，并把 `dist` 自动发布到 GitHub Pages。开始使用前：
+
+1. 依次在 **Settings → Secrets and variables → Actions** 创建下表 6 个变量（以及可选的 `VITE_FIREBASE_MEASUREMENT_ID`），名称需与 `.env.example` 一致，值填入 Firebase 配置。
+2. 在 **Settings → Pages** 中把 `Build and deployment` 切换为 **GitHub Actions**。
+3. 推送代码或在 Actions 里点击 **Run workflow**，等待 `Deploy to GitHub Pages` 流程显示绿色对号。
+4. 成功后站点会托管在 `https://kkunit.github.io/xxx/`，别忘了在 README / PR 中更新访问地址。
+
+> `vite.config.ts` 会在 `GITHUB_ACTIONS=true` 时把 `base` 切换为 `/xxx/`，因此 GitHub Pages 能正确加载资源，而本地或其他平台的构建仍使用 `/`。
