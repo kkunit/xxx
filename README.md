@@ -54,8 +54,20 @@
 1. 在左侧导航栏点击 **Build → Firestore Database**。
 2. 点击 **Create database**，选择 **Start in production mode**。
 3. 地区（Region）随意，建议离你用户最近。
+4. 在 **Rules** 页签里添加一条允许匿名用户读写留言的规则，然后点击 **Publish** 保存：
 
-> 项目读取的是 `artifacts/{projectId}/public/data/sugar_messages` 这个集合路径，所以创建好后就可以直接使用，无需自定义规则。
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /artifacts/{appId}/public/data/sugar_messages/{document=**} {
+         allow read, write: if request.auth != null;
+       }
+     }
+   }
+   ```
+
+   > 如果你只希望允许写入，可以把 `read` 改成 `get, list` 或者删掉；若未来改用其他登录方式，也可以把 `request.auth != null` 换成更精细的角色判断。
 
 ## 3. 启用匿名登录
 
