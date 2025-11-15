@@ -54,10 +54,30 @@
 1. 在左侧导航栏点击 **Build → Firestore Database**。
 2. 点击 **Create database**，选择 **Start in production mode**。
 3. 地区（Region）随意，建议离你用户最近。
+4. 在 **Rules** 页签里添加一条允许匿名用户读写留言的规则，然后点击 **Publish** 保存：
 
-> 项目读取的是 `artifacts/{projectId}/public/data/sugar_messages` 这个集合路径，所以创建好后就可以直接使用，无需自定义规则。
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /artifacts/{appId}/public/data/sugar_messages/{document=**} {
+         allow read, write: if request.auth != null;
+       }
+     }
+   }
+   ```
 
-## 3. 配置环境变量
+   > 如果你只希望允许写入，可以把 `read` 改成 `get, list` 或者删掉；若未来改用其他登录方式，也可以把 `request.auth != null` 换成更精细的角色判断。
+
+## 3. 启用匿名登录
+
+1. 在 Firebase 控制台左侧导航选择 **Build → Authentication**。
+2. 切换到 **Sign-in method** 标签页。
+3. 在 **Providers** 列表中找到 **Anonymous**，点击进入并启用它，然后保存。
+4. 切换到同一页顶部的 **Settings** 选项卡，在 **Authorized domains** 中添加你的网站域名（例如 `your-project.vercel.app`）。
+5. 完成上述设置后重新部署站点，匿名登录即可正常工作。
+
+## 4. 配置环境变量
 项目通过 `import.meta.env.VITE_*` 读取配置。无论在本地还是 Vercel，都需要把刚刚复制的 6 个字段写进去。
 
 ### 本地开发
@@ -72,13 +92,13 @@
 3. 如果分为 `Production` / `Preview` / `Development` 环境，可以直接勾选 “Apply to all”。
 4. 保存后重新 **Deploy**，Vercel 会自动带着新的环境变量重新构建。
 
-## 4. 验证
+## 5. 验证
 - 本地执行 `npm run build`：如果环境变量配置正确，构建会顺利通过。
 - Vercel 上检查 **Deployments** 日志：能看到 `npm run build` 成功完成。
 
 搞定！以后若更换 Firebase 项目，只要更新这 6 个变量即可。
 
-## 5. PR 出现冲突时怎么办？
+## 6. PR 出现冲突时怎么办？
 
 当你在 Vercel 或 GitHub 上看到 “This branch has conflicts that must be resolved” 的提示时，说明你当前分支里的一些文件版本已经落后于主分支（通常是 `main` 或 `master`）。可以按照下面的步骤解决：
 

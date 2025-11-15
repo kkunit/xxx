@@ -118,6 +118,7 @@ export default function App() {
   const [showShareHelp, setShowShareHelp] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [copyState, setCopyState] = useState('idle');
+  const [authError, setAuthError] = useState(null);
 
   const configError = !firebaseConfig;
   const SECRET_CODE = '520';
@@ -146,6 +147,130 @@ export default function App() {
 
   const resolveTheme = (index = 0) => cardThemes[index % cardThemes.length];
 
+  const getCurrentHostname = () => {
+    if (typeof window === 'undefined') {
+      return '当前域名';
+    }
+    return window.location.hostname;
+  };
+
+  const DEFAULT_AUTH_ERROR_MESSAGE = '星星登录遇到了一点小问题，请刷新后再试~';
+
+  const resolveAuthGuidance = (error) => {
+    if (!error) {
+      return null;
+    }
+
+    switch (error.code) {
+      case 'auth/operation-not-allowed':
+        return {
+          reason: 'Firebase 项目尚未启用 Anonymous 匿名登录。',
+          action: '在 Firebase 控制台 Authentication → Sign-in method 中启用 Anonymous 登录方式，然后重新部署站点。'
+        };
+      case 'auth/unauthorized-domain':
+        return {
+          reason: `当前域名 ${getCurrentHostname()} 未加入 Firebase 的 Authorized domains 白名单。`,
+          action: '在 Firebase 控制台 Authentication → Settings → Authorized domains 中添加该域名后重新部署。'
+        };
+      case 'auth/network-request-failed':
+        return {
+          reason: '网络连接异常或 Firebase 请求被浏览器拦截。',
+          action: '检查当前网络环境，或确认浏览器/防火墙没有阻止访问 *.firebaseapp.com 与 *.googleapis.com。'
+        };
+      default:
+        if (error.message) {
+          return {
+            reason: error.message
+          };
+        }
+        return null;
+    }
+  };
+
+  const handleAuthError = (error) => {
+    console.error('Firebase auth error:', error);
+    const guidance = resolveAuthGuidance(error);
+    if (guidance?.action) {
+      console.info(`[登录配置提醒] ${guidance.action}`);
+    }
+    setAuthError({
+      message: DEFAULT_AUTH_ERROR_MESSAGE,
+      reason: guidance?.reason ?? null,
+      action: guidance?.action ?? null
+    });
+    return DEFAULT_AUTH_ERROR_MESSAGE;
+  };
+
+  const DEFAULT_FIRESTORE_ERROR_MESSAGE = '星星邮差迷路了，请刷新后再试~';
+  const SEND_TIMEOUT_MS = 12000;
+
+  const withTimeout = (promise, timeout) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const error = new Error(`等待 Firestore 响应超过 ${Math.round(timeout / 1000)} 秒`);
+        error.code = 'client/send-timeout';
+        reject(error);
+      }, timeout);
+
+      promise
+        .then((value) => {
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch((error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+    });
+
+  const resolveFirestoreGuidance = (error) => {
+    if (!error) {
+      return null;
+    }
+
+    switch (error.code) {
+      case 'permission-denied':
+        return {
+          reason: 'Firestore 安全规则禁止当前登录方式写入留言。',
+          action:
+            '在 Firebase 控制台 Firestore Database → Rules 中允许匿名用户写入 artifacts/{appId}/public/data/sugar_messages，或改用受支持的身份验证方式。'
+        };
+      case 'failed-precondition':
+        return {
+          reason: 'Firestore 索引或项目状态异常。',
+          action: '确认已经在 Firebase 控制台启用 Firestore 并完成数据库初始化。'
+        };
+      case 'unavailable':
+        return {
+          reason: 'Firestore 服务暂时不可用或网络连接异常。',
+          action: '稍后再试，或检查部署环境是否能够访问 *.firebaseio.com 与 *.googleapis.com。'
+        };
+      case 'client/send-timeout':
+        return {
+          reason: `等待 Firestore 响应超过 ${Math.round(SEND_TIMEOUT_MS / 1000)} 秒。`,
+          action: '检查服务器与浏览器的网络环境，确认可以正常访问 Firestore 接口。'
+        };
+      default:
+        if (error.message) {
+          return { reason: error.message };
+        }
+        return null;
+    }
+  };
+
+  const handleFirestoreError = (error) => {
+    console.error('Firestore error:', error);
+    const guidance = resolveFirestoreGuidance(error);
+    if (guidance?.action) {
+      console.info(`[数据库配置提醒] ${guidance.action}`);
+    }
+    const baseMessage = DEFAULT_FIRESTORE_ERROR_MESSAGE;
+    if (!guidance?.reason) {
+      return baseMessage;
+    }
+    return `${baseMessage}\n\n可能的原因：${guidance.reason}`;
+  };
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -169,7 +294,7 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (error) {
-        console.error('Firebase auth error:', error);
+        handleAuthError(error);
       }
     };
 
@@ -224,28 +349,31 @@ export default function App() {
         activeUser = credential.user;
         setUser(activeUser);
       } catch (error) {
-        console.error('Firebase Anonymous Auth error:', error);
-        alert('星星登录遇到了一点小问题，请刷新后再试~');
+        const message = handleAuthError(error);
+        alert(message);
         return;
       }
     }
 
     setLoading(true);
     try {
-      await addDoc(collection(db, 'artifacts', uniqueAppId, 'public', 'data', 'sugar_messages'), {
-        name: senderName.trim() || '匿名星友',
-        content: messageContent,
-        timestamp: Date.now(),
-        theme: Math.floor(Math.random() * cardThemes.length)
-      });
+      await withTimeout(
+        addDoc(collection(db, 'artifacts', uniqueAppId, 'public', 'data', 'sugar_messages'), {
+          name: senderName.trim() || '匿名星友',
+          content: messageContent,
+          timestamp: Date.now(),
+          theme: Math.floor(Math.random() * cardThemes.length)
+        }),
+        SEND_TIMEOUT_MS
+      );
 
       setShowSuccess(true);
       setSenderName('');
       setMessageContent('');
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
-      console.error('Error sending message:', error);
-      alert('星星邮差迷路了，请刷新后再试~');
+      const message = handleFirestoreError(error);
+      alert(message);
     } finally {
       setLoading(false);
     }
@@ -274,6 +402,35 @@ export default function App() {
       style={bgStyle}
       className="min-h-screen w-full flex flex-col items-center font-sans text-slate-700 relative overflow-hidden selection:bg-indigo-200/70"
     >
+      {authError && (
+        <div className="fixed top-6 inset-x-0 flex justify-center z-[80] px-4">
+          <div className="max-w-xl w-full bg-white/90 border border-rose-200 text-rose-600 rounded-2xl shadow-lg px-4 py-3 flex flex-col gap-2">
+            <div className="flex items-center gap-2 font-semibold">
+              <Lock size={18} />
+              <span>登录配置提醒</span>
+            </div>
+            <p className="text-sm leading-relaxed">{authError.message}</p>
+            {authError.reason && (
+              <p className="text-xs leading-relaxed text-rose-500/90">
+                可能的原因：{authError.reason}
+              </p>
+            )}
+            {authError.action && (
+              <p className="text-xs leading-relaxed text-rose-500/80">
+                排查建议：{authError.action}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => setAuthError(null)}
+              className="self-end text-xs text-rose-500 hover:text-rose-600 transition-colors"
+            >
+              我知道啦
+            </button>
+          </div>
+        </div>
+      )}
+
       {configError && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white">
           <div className="max-w-md mx-auto text-center space-y-4 px-6">
